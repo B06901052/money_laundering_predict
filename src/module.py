@@ -28,6 +28,7 @@ class FeatureEmbedder(nn.Module):
             nn.BatchNorm1d((num_categorical + num_numerical + 1) * emb_dim),
             weight_norm(nn.Linear((num_categorical + num_numerical + 1) * emb_dim, hidden_dim)),
             nn.ReLU(),
+            weight_norm(nn.Linear(hidden_dim, hidden_dim)),
         )
         
     def forward(self, feats):

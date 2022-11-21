@@ -68,11 +68,10 @@ class TrainDataset(Dataset):
         if hasattr(self, "y"):
             return self.train_base_dataset[alert_key], self.y[idx]
         else:
-            return self.train_base_dataset[alert_key]
+            return self.train_base_dataset[alert_key], alert_key
     
     def collate_fn(self, batch):
-        if hasattr(self, "y"):
-            batch, label = zip(*batch)
+        batch, label = zip(*batch)
         max_seq = max(len(sample[0]["event_index"]) for sample in batch)
         max_seq = min(max_seq, self.max_seq)
         targets = []
@@ -115,7 +114,7 @@ class TrainDataset(Dataset):
         if hasattr(self, "y"):
             return events, orders, max_seq, targets, torch.LongTensor(label)
         else:
-            return events, orders, max_seq, targets
+            return events, orders, max_seq, targets, label
     
 if __name__ == "__main__":
     from pathlib import Path

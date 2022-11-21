@@ -1,3 +1,4 @@
+import pandas as pd
 from pathlib import Path
 from tqdm.auto import tqdm
 from multiprocessing import cpu_count
@@ -27,6 +28,7 @@ if __name__ == "__main__":
     batch_size = 128
     epochs = 10
     lr = 1e-2
+    weight_decay = 1e-4
     device = "cuda" if torch.cuda.is_available() else "cpu"
     train_loader = DataLoader(
         train_dataset,
@@ -38,14 +40,21 @@ if __name__ == "__main__":
     )
     valid_loader = DataLoader(
         valid_dataset,
-        batch_size=512,
+        batch_size=batch_size,
         shuffle=False,
         collate_fn=dataset.collate_fn,
         num_workers=cpu_count(),
         pin_memory=True,
     )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=test_dataset.collate_fn,
+        num_workers=cpu_count(),
+    )
     
-    optim = Ranger(model.parameters(), lr=lr)
+    optim = Ranger(model.parameters(), lr=lr, weight_decay=weight_decay)
     criterion = nn.BCEWithLogitsLoss()
     model = model.to(device)
     
@@ -64,7 +73,7 @@ if __name__ == "__main__":
             optim.zero_grad(set_to_none=True)
             loss.backward()
             optim.step()
-            pbar.set_postfix({"loss": loss.item(), "out": out[0].item()})
+            pbar.set_postfix({"loss": f"{loss.item():4.2f}"})
             total_loss += loss.item() * len(labels)
         total_loss /= len(train_loader.dataset)
             
@@ -73,17 +82,41 @@ if __name__ == "__main__":
         total_loss = 0
         all_outs = []
         all_labels = []
-        for events, orders, max_seq, targets, labels in tqdm(train_loader):
+        for events, orders, max_seq, targets, labels in tqdm(valid_loader):
             for value in events.values():
                 for key in value:
                     value[key] = value[key].to(device)
+            all_labels.extend(labels.cpu().tolist())
             labels = labels.to(device=device, dtype=torch.float32)
             out = model(events, orders, max_seq, batch_size)[range(len(targets)), targets]
             loss = criterion(out, labels)
-            all_outs.extend(out)
+            all_outs.extend(out.tolist())
             total_loss += loss.item() * len(labels)
+        all_outs = enumerate(sorted(zip(all_outs, all_labels), key=lambda x: x[0], reverse=True))
+        all_outs = list(filter(lambda x: x[1][1]==1, all_outs))
         total_loss /= len(valid_loader.dataset)
-        print("\n", total_loss)
+        print("\n", total_loss, " ", (len(all_outs) - 1) / all_outs[-2][0])
+        
+    all_alert_keys = set(pd.read_csv("data/submission_sample.csv").alert_key)
+    predict_alert_keys = []
+    probs = []
+    for events, orders, max_seq, targets, alert_keys in tqdm(test_loader):
+        predict_alert_keys.extend(alert_keys)
+        for value in events.values():
+            for key in value:
+                value[key] = value[key].to(device)
+        out = model(events, orders, max_seq, batch_size)[range(len(targets)), targets]
+        probs.extend(out.cpu().tolist())
+    
+    lines = sorted(zip(all_alert_keys, probs), key=lambda x: x[1], reverse=True)
+    lines = "\n".join(map(lambda x: f"{x[0]},{x[1]}", lines))
+    with open("prediction.csv", 'w') as f:
+        f.write("alert_key,probability\n" + lines + "\n")
+        
+        
+    
+        
+    
             
-            
+    
         
