@@ -1,0 +1,105 @@
+ccba:
+  cust_id:
+    type: label
+  lupay:
+    type: numerical
+  byymm:
+    type: date
+  cycam:
+    type: numerical
+  usgam:
+    type: numerical
+  clamt:
+    type: numerical
+  csamt:
+    type: numerical
+  inamt:
+    type: numerical
+  cucsm:
+    type: numerical
+  cucah:
+    type: numerical
+cdtx:
+  cust_id:
+    type: label
+  date:
+    type: date
+  country:
+    type: categorical
+    num: 128
+  cur_type:
+    type: categorical
+    num: 51
+  amt:
+    type: numerical
+custinfo:
+  cust_id:
+    type: label
+  alert_key:
+    type: label
+  date:
+    type: date
+  risk_rank:
+    type: categorical
+    num: 4
+  occupation_code:
+    type: categorical
+    num: 22
+  total_asset:
+    type: numerical
+  AGE:
+    type: categorical
+    num: 11
+dp:
+  cust_id:
+    type: label
+  debit_credit:
+    type: categorical
+    num: 2
+  tx_date:
+    type: date
+  tx_time:
+    type: categorical
+    num: 24
+  tx_type:
+    type: categorical
+    num: 3
+  tx_amt:
+    type: numerical
+  exchg_rate:
+    type: numerical
+  info_asset_code:
+    type: categorical
+    num: 22
+  fiscTxId:
+    type: categorical
+    num: 30
+  txbranch:
+    type: categorical
+    num: 350
+  cross_bank:
+    type: categorical
+    num: 2
+  ATM:
+    type: categorical
+    num: 2
+remit:
+  cust_id:
+    type: label
+  trans_date:
+    type: date
+  trans_no:
+    type: categorical
+    num: 5
+  trade_amount_usd:
+    type: numerical
+public_x:
+  alert_key:
+    type: label
+  date:
+    type: date
+train_x:
+  alert_key:
+    type: label
+  date:
+    type: date
