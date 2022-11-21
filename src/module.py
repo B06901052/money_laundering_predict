@@ -17,11 +17,12 @@ class FeatureEmbedder(nn.Module):
         self.num_categorical = num_categorical
         if num_categorical:
             self.cat_embedding = nn.Sequential(
-                nn.Embedding(num_categories, emb_dim),
+                nn.Embedding(num_categories, emb_dim, scale_grad_by_freq=True),
                 nn.Flatten(start_dim=1)
             )
         self.num_embedding = nn.Sequential(
-            weight_norm(nn.Linear(num_numerical + 1, (num_numerical + 1) * emb_dim)),
+            nn.Dropout(.1),
+            nn.Linear(num_numerical + 1, (num_numerical + 1) * emb_dim),
         )
         self.date_params = nn.Parameter(torch.Tensor([0,1]))
         self.net = nn.Sequential(

@@ -1,4 +1,5 @@
 import pandas as pd
+from itertools import chain
 from pathlib import Path
 from tqdm.auto import tqdm
 from multiprocessing import cpu_count
@@ -25,7 +26,7 @@ if __name__ == "__main__":
     )
     test_dataset = TrainDataset(meta_dataset, 'data/public_x_alert_date.csv')
     
-    batch_size = 128
+    batch_size = 256
     epochs = 10
     lr = 1e-2
     weight_decay = 1e-4
@@ -33,7 +34,7 @@ if __name__ == "__main__":
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
-        sampler=WeightedRandomSampler(torch.where(dataset.y[train_dataset.indices]==1, 20, 1), num_samples=len(train_dataset)),
+        sampler=WeightedRandomSampler(torch.where(dataset.y[train_dataset.indices]==1, 40, 1), num_samples=len(train_dataset)),
         collate_fn=dataset.collate_fn,
         num_workers=cpu_count(),
         pin_memory=True,
@@ -106,12 +107,20 @@ if __name__ == "__main__":
             for key in value:
                 value[key] = value[key].to(device)
         out = model(events, orders, max_seq, batch_size)[range(len(targets)), targets]
+        out = torch.sigmoid(out)
         probs.extend(out.cpu().tolist())
     
-    lines = sorted(zip(all_alert_keys, probs), key=lambda x: x[1], reverse=True)
-    lines = "\n".join(map(lambda x: f"{x[0]},{x[1]}", lines))
+    other_alert_keys = all_alert_keys - set(predict_alert_keys)
+    
+    lines = sorted(zip(predict_alert_keys, probs), key=lambda x: x[1], reverse=True)
+    lines = "\n".join(chain(
+        ["alert_key,probability"],
+        map(lambda x: f"{x[0]},{x[1]}", lines),
+        map(lambda x: f"{x},0.0", other_alert_keys),
+        [""]
+    ))
     with open("prediction.csv", 'w') as f:
-        f.write("alert_key,probability\n" + lines + "\n")
+        f.write(lines)
         
         
     
