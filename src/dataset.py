@@ -1,4 +1,5 @@
 import pickle
+import numpy as np
 
 import torch
 from torch.utils.data import Dataset
@@ -26,7 +27,7 @@ class PretrainDataset:
             # TODO
             pass
             
-class TrainBaseDataset:
+class TrainMetaDataset:
     def __init__(self, data_path):
         with open(data_path / 'data.pkl', 'rb') as f:
             self.data = pickle.load(f)
@@ -46,9 +47,11 @@ class TrainBaseDataset:
         return self.data[cust_id], event_idx
 
 class TrainDataset(Dataset):
-    def __init__(self, train_base_dataset, x_path, y_path=None, max_seq=128):
+    def __init__(self, train_base_dataset, x_path, y_path=None, max_seq=128, min_seq_ratio=0.3, istrain=False):
         self.train_base_dataset = train_base_dataset
         self.max_seq = max_seq
+        self.min_seq_ratio = min_seq_ratio
+        self.istrain = istrain
         if y_path:
             with open(y_path, 'r') as f:
                 # alert_key: sar_flag
@@ -74,6 +77,10 @@ class TrainDataset(Dataset):
         batch, label = zip(*batch)
         max_seq = max(len(sample[0]["event_index"]) for sample in batch)
         max_seq = min(max_seq, self.max_seq)
+        if self.istrain:
+            seq_len = round(np.random.uniform(self.min_seq_ratio, 1) * max_seq)
+        else:
+            seq_len = max_seq
         targets = []
         events = {
             key: {k: [] for k in ["num", "cat", "date"]}
@@ -83,13 +90,17 @@ class TrainDataset(Dataset):
         for batch_id, (data, alert_event_idx) in enumerate(batch):
             idx_counter = IndexCounter()
             length = len(data['event_index'])
-            s = alert_event_idx - max_seq // 2
-            e = s + max_seq
+            if self.istrain:
+                bias = np.random.randint(seq_len>>1, seq_len - 1)
+            else:
+                bias = seq_len >> 1
+            s = alert_event_idx - bias
+            e = s + seq_len
             if s < 0:
                 s = 0
-                e = max_seq
+                e = seq_len
             elif e > length:
-                s = length - max_seq
+                s = length - seq_len
                 e = length
             for event in data['event_index'][s:e]:
                 event_type, idx, _ = event
@@ -112,16 +123,16 @@ class TrainDataset(Dataset):
             value['date'] = torch.Tensor(value['date'])
         
         if hasattr(self, "y"):
-            return events, orders, max_seq, targets, torch.LongTensor(label)
+            return events, orders, seq_len, targets, torch.LongTensor(label)
         else:
-            return events, orders, max_seq, targets, label
+            return events, orders, seq_len, targets, label
     
 if __name__ == "__main__":
     from pathlib import Path
     from torch.utils.data import DataLoader
     from tqdm.auto import tqdm
     from multiprocessing import cpu_count
-    meta_dataset = TrainBaseDataset(Path("data"))
+    meta_dataset = TrainMetaDataset(Path("data"))
     dataset = TrainDataset(meta_dataset, 'data/train_x_alert_date.csv', "data/train_y_answer.csv")
     # loader = DataLoader(
     #     dataset,

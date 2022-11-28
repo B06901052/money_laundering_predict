@@ -45,6 +45,8 @@ custinfo:
   occupation_code:
     type: categorical
     num: 22
+    fillna: 
+      method: new
   total_asset:
     type: numerical
   AGE:
@@ -66,6 +68,8 @@ dp:
     num: 3
   tx_amt:
     type: numerical
+    fillna: 
+      method: mean
   exchg_rate:
     type: numerical
   info_asset_code:
@@ -74,9 +78,13 @@ dp:
   fiscTxId:
     type: categorical
     num: 30
+    fillna: 
+      method: new
   txbranch:
     type: categorical
     num: 350
+    fillna: 
+      method: new
   cross_bank:
     type: categorical
     num: 2
