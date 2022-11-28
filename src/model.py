@@ -50,10 +50,10 @@ class Model(nn.Module):
         # )
         
         self.pred_head = nn.Sequential(
-            nn.Linear(hidden_dim<<1, hidden_dim),
-            nn.ReLU(),
-            nn.BatchNorm1d(hidden_dim),
-            nn.Linear(hidden_dim, 1),
+            # nn.Linear(hidden_dim<<1, hidden_dim),
+            # nn.ReLU(),
+            # nn.BatchNorm1d(hidden_dim),
+            nn.Linear(hidden_dim<<1, 1),
         )
         
         self.hidden_dim = hidden_dim
