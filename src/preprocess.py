@@ -5,21 +5,19 @@ import pandas as pd
 from pathlib import Path
 from collections import Counter
 
-import torch
-
-class IndexCounter:
-    def __init__(self, start_idx=0):
-        self.idx = start_idx - 1
-        
-    def __iter__(self):
-        while True:
-            self.idx += 1
-            yield self.idx
-    def __next__(self):
-        self.idx += 1
-        return self.idx
+from utils import IndexCounter
 
 def load_tables(data_path):
+    """
+    load each table, merge the date information into custinfo
+    """
+    """load_tables
+    
+    return 5 tables: ccba, cdtx, custinfo, dp, remit
+
+    Returns:
+        dict[str, DataFrame]: table name map to table
+    """
     tables = {}
     tables["ccba"] = pd.read_csv(data_path / "public_train_x_ccba_full_hashed.csv")
     tables["cdtx"] = pd.read_csv(data_path / "public_train_x_cdtx0001_full_hashed.csv")
@@ -35,23 +33,28 @@ def load_tables(data_path):
     ).sort_values(by="alert_key")
     return tables
 
-
-
 def data_preprocess(tables, data_config, data_path):
     mapping = {}
+    # iterate each table
     for table_name, table in tables.items():
-        idx_counter = IndexCounter()
+        # accumulate the index for the categories in the same table
+        idx_counter = IndexCounter(1)
         for col_name in table:
             cfg = data_config[table_name][col_name]
             if cfg['type'] == "date":
                 table[col_name] = table[col_name] / 365
             elif cfg['type'] == "categorical":
+                # handle the missing value
                 series = table[col_name].fillna(-1)
+                # map the category to new label
                 labels = sorted(series.unique())
                 mapping[col_name] = dict(zip(labels, idx_counter))
                 table[col_name] = series.apply(lambda x: mapping[col_name][x])
             elif cfg['type'] == "numerical":
+                # normalization
                 table[col_name] = (table[col_name] - table[col_name].mean()) / table[col_name].std()
+                # handle the missing value
+                table[col_name].fillna(0, inplace=True)
             elif cfg['type'] == "label":
                 pass
             else:
@@ -69,6 +72,7 @@ def data_preprocess(tables, data_config, data_path):
     return tables
         
 def concat_data(grouped_tables, data_config):
+    # construct a dict which keys are all cust_ids
     data = {key: {} for key in grouped_tables["custinfo"].groups.keys()}
     for table_name, table in grouped_tables.items():
         data_type_counter = Counter(v['type'] for v in data_config[table_name].values())
@@ -77,8 +81,8 @@ def concat_data(grouped_tables, data_config):
             data[cust_id][table_name] = {}
             cat_idx_counter = IndexCounter()
             num_idx_counter = IndexCounter()
-            categorical = np.empty((num, data_type_counter["categorical"]), dtype=np.int64)
-            numerical = np.empty((num, data_type_counter["numerical"]), dtype=np.float32)
+            categorical = np.full((num, data_type_counter["categorical"]), float('nan'), dtype=np.int64)
+            numerical = np.full((num, data_type_counter["numerical"]), float('nan'), dtype=np.float32)
             for col_name in df:
                 cfg = data_config[table_name][col_name]
                 if cfg['type'] == "date":
@@ -92,14 +96,21 @@ def concat_data(grouped_tables, data_config):
                 else:
                     raise NotImplementedError
 
+            assert (
+                not np.isnan(date).any() and
+                not np.isnan(categorical).any() and
+                not np.isnan(numerical).any()
+            ), "something is nan"
+
             data[cust_id][table_name]["date"] = date
             data[cust_id][table_name]["cat"] = categorical
             data[cust_id][table_name]["num"] = numerical
     
+    # sort each event by date and record the event index
     for cust_id, tables in list(data.items()):
         event_index = []
         for table_name, table in tables.items():
-            event_index.extend(((table_name, i, date) for i, date in enumerate(table["date"])))
+            event_index.extend((table_name, i, date) for i, date in enumerate(table["date"]))
         event_index.sort(key=lambda x: x[-1])
         data[cust_id]["event_index"] = event_index
     
