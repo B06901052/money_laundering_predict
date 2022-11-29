@@ -2,7 +2,7 @@ import pickle
 
 import torch
 from torch.utils.data import Dataset
-
+from pdb import set_trace
 from preprocess import IndexCounter
 
 class PretrainDataset:
@@ -32,6 +32,7 @@ class TrainBaseDataset:
             self.data = pickle.load(f)
             
         self.alert = {}
+        set_trace()
         for cust_id, value in self.data.items():
             tmp = enumerate(value["event_index"])
             for event_idx, (_, custinfo_idx, _) in filter(lambda x: x[1][0] == "custinfo", tmp):

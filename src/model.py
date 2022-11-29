@@ -3,12 +3,13 @@ import torch.nn as nn
 from module import FeatureEmbedder
 import yaml
 from collections import Counter
-
+from pdb import set_trace
 from preprocess import IndexCounter
 
 class Model(nn.Module):
     def __init__(self, data_config=None, emb_dim=8, hidden_dim=64):
         super().__init__()
+
         self.ccba_emb  = FeatureEmbedder(0, 8, 0, emb_dim, hidden_dim)
         self.cdtx_emb  = FeatureEmbedder(2, 1, 128+51, emb_dim, hidden_dim)
         self.cust_emb  = FeatureEmbedder(3, 1, 4+22+11, emb_dim, hidden_dim)
