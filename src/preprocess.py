@@ -5,7 +5,7 @@ import pandas as pd
 from pathlib import Path
 from collections import Counter
 
-from utils import IndexCounter
+from .utils import IndexCounter
 
 def load_tables(data_path):
     """

@@ -8,8 +8,8 @@ class FeatureEmbedder(nn.Module):
         num_categorical,
         num_numerical,
         num_categories,
-        emb_dim=32,
-        hidden_dim=256,
+        emb_dim=64,
+        hidden_dim=512,
         feature_dropout=0.1,
     ):
         super().__init__()
@@ -35,7 +35,6 @@ class FeatureEmbedder(nn.Module):
         
     def forward(self, feats):
         cats, nums, dates = feats['cat'], feats['num'], feats['date']
-        cats, nums, dates = cats.nan_to_num(), nums.nan_to_num(), dates.nan_to_num()
         if dates.size(0) == 0:
             return torch.empty((0, self.hidden_dim), dtype=torch.float32, device=cats.device)
         w = torch.sigmoid(self.date_params[0])

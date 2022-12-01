@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from module import FeatureEmbedder, SingleEventPredictor
+from .module import FeatureEmbedder, SingleEventPredictor
 
 class Model(nn.Module):
     def __init__(self, data_config=None, emb_dim=8, hidden_dim=64):
@@ -11,21 +11,32 @@ class Model(nn.Module):
         self.dp_emb    = FeatureEmbedder(8, 2, 2+24+3+22+30+350+2+2, emb_dim, hidden_dim)
         self.remit_emb = FeatureEmbedder(1, 1, 5, emb_dim, hidden_dim)
         
-        self.ccba_pred  = SingleEventPredictor(8, [0], hidden_dim)
-        self.cdtx_pred  = SingleEventPredictor(1, [128,51], hidden_dim)
-        self.cust_pred  = SingleEventPredictor(1, [4,22,11], hidden_dim)
-        self.dp_pred    = SingleEventPredictor(2, [2,24,3,22,30,350,2,2], hidden_dim)
-        self.remit_pred = SingleEventPredictor(1, [5], hidden_dim)
+        # self.ccba_pred  = SingleEventPredictor(8, [0], hidden_dim)
+        # self.cdtx_pred  = SingleEventPredictor(1, [128,51], hidden_dim)
+        # self.cust_pred  = SingleEventPredictor(1, [4,22,11], hidden_dim)
+        # self.dp_pred    = SingleEventPredictor(2, [2,24,3,22,30,350,2,2], hidden_dim)
+        # self.remit_pred = SingleEventPredictor(1, [5], hidden_dim)
         
         self.pred_crit = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([4]))
         
         self.conv = nn.Sequential(
             nn.Conv1d(hidden_dim, hidden_dim, 5, padding=2, groups=4),
         )
+        # self.conv2 = nn.Sequential(
+        #     nn.Conv1d(hidden_dim, hidden_dim, 5, padding=4, groups=4, dilation=2),
+        #     nn.ReLU(),
+        #     nn.BatchNorm1d(hidden_dim),
+        #     nn.AvgPool1d(2),
+        #     nn.Conv1d(hidden_dim, hidden_dim, 5, padding=4, groups=4, dilation=2),
+        #     nn.ReLU(),
+        #     nn.BatchNorm1d(hidden_dim),
+        #     nn.AvgPool1d(2),
+        #     nn.Conv1d(hidden_dim, hidden_dim, 5, padding=4, groups=4, dilation=2),
+        # )
         self.net = nn.LSTM(
             input_size=hidden_dim,
             hidden_size=hidden_dim,
-            num_layers=2,
+            num_layers=4,
             batch_first=True,
             bidirectional=True,
         )
@@ -57,6 +68,8 @@ class Model(nn.Module):
         )
         
         self.hidden_dim = hidden_dim
+        self.pad_embedding = nn.Parameter(torch.randn((1,1,hidden_dim)))
+        self.attn = nn.MultiheadAttention(hidden_dim, 8, batch_first=True)
         
     def forward(self, events, orders, length, batch_size, targets, labels=None):
         # embed the event
@@ -67,12 +80,20 @@ class Model(nn.Module):
         feats["dp"] = self.dp_emb(events["dp"])
         feats["remit"] = self.remit_emb(events["remit"])
         # cat event into sequence
-        feat = torch.empty((batch_size, length, self.hidden_dim), device=feats["ccba"].device)
+        # feat = torch.full((batch_size, length, self.hidden_dim), device=feats["ccba"].device, fill_value=float("nan"))
+        feat = self.pad_embedding.repeat((batch_size, length, 1))
+        mask = torch.ones(feat.shape[:2], dtype=torch.bool, device=feat.device)
         for key, value in orders.items():
             feat[value[0], value[1]] = feats[key].to(dtype=feat.dtype)
+            mask[value[0], value[1]] = False
+
         # conv sequence
-        feat = self.conv(feat.transpose(1,2)).transpose(1,2)
+        # L = feat.size(1)
+        # feat2 = nn.functional.interpolate(self.conv2(feat.transpose(1,2)), L).transpose(1,2)
+        # feat = torch.cat((self.conv(feat.transpose(1,2)).transpose(1,2), feat2), dim=2)
+        # feat = self.conv(feat.transpose(1,2)).transpose(1,2)
         # rnn sequence
+        feat = self.attn(feat, feat, feat, key_padding_mask=mask)[0]
         feat = self.net(feat)[0]
         # predict sar
         pred = self.pred_head(feat[range(len(targets)), targets]).squeeze(-1)

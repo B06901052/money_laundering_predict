@@ -1,0 +1,19 @@
+runner:
+  n_epochs: 10
+  total_steps: -1
+  gradient_clipping: 10.0
+  gradient_accumulate_steps: 1
+  save_epochs: 1
+  max_keep: 1
+  fp16: false
+
+datarc:
+  num_workers: "auto"
+  batch_size: 192
+  max_seq: 256
+  train_ratio: .8
+
+optimizer:
+  name: Ranger
+  lr: 1.e-2
+  weight_decay: 1.e-4

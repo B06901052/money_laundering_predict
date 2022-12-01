@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from preprocess import IndexCounter
+from .preprocess import IndexCounter
 
 class PretrainDataset:
     def __init__(self, data_path, max_len=64):
@@ -109,6 +109,8 @@ class TrainDataset(Dataset):
                 events[event_type]['date'].append(data[event_type]['date'][idx])
                 orders[event_type][0].append(batch_id)
                 orders[event_type][1].append(next(idx_counter))
+                
+            # assert next(idx_counter) == seq_len, (next(idx_counter) - 1, seq_len, s, e, len(data['event_index']))
                 
             targets.append(alert_event_idx - s)
         for value in events.values():
