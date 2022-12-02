@@ -13,8 +13,8 @@ from pytorch_ranger import Ranger
 from torch.optim import Adam, SGD
 from torch.utils.data import DataLoader, WeightedRandomSampler, random_split
 
-from .model import Model
-from .dataset import TrainMetaDataset, TrainDataset
+from model import Model
+from dataset import TrainMetaDataset, TrainDataset
 
 class Runner:
     def __init__(self, args, runner_config={}, model_config={}):
