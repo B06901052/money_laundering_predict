@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from preprocess import IndexCounter
+from .utils import IndexCounter
 
 class PretrainDataset:
     def __init__(self, data_path, max_len=64):
@@ -69,12 +69,12 @@ class TrainDataset(Dataset):
     def __getitem__(self, idx):
         alert_key = int(self.x[idx])
         if hasattr(self, "y"):
-            return self.train_base_dataset[alert_key], self.y[idx]
+            return self.train_base_dataset[alert_key], self.y[idx], idx
         else:
-            return self.train_base_dataset[alert_key], alert_key
+            return self.train_base_dataset[alert_key], alert_key, idx
     
     def collate_fn(self, batch):
-        batch, label = zip(*batch)
+        batch, label, sample_idx = zip(*batch)
         max_seq = max(len(sample[0]["event_index"]) for sample in batch)
         max_seq = min(max_seq, self.max_seq)
         if self.istrain:
@@ -87,7 +87,15 @@ class TrainDataset(Dataset):
                 for key in ["ccba", "cdtx", 'custinfo', 'dp', 'remit']
         }
         orders = {key: [[],[]] for key in ["ccba", "cdtx", 'custinfo', 'dp', 'remit']}
+        summarys = []
         for batch_id, (data, alert_event_idx) in enumerate(batch):
+            summarys.append(torch.cat((
+                torch.from_numpy(data["ccba_summary"]).to(dtype=torch.float32) if "ccba_summary" in data else torch.zeros(127),
+                torch.from_numpy(data["cdtx_summary"]).to(dtype=torch.float32) if "cdtx_summary" in data else torch.zeros(36),
+                torch.from_numpy(data["custinfo_summary"]).to(dtype=torch.float32) if "custinfo_summary" in data else torch.zeros(50),
+                torch.from_numpy(data["dp_summary"]).to(dtype=torch.float32) if "dp_summary" in data else torch.zeros(85),
+                torch.from_numpy(data["remit_summary"]).to(dtype=torch.float32) if "remit_summary" in data else torch.zeros(29),
+            )))
             idx_counter = IndexCounter()
             length = len(data['event_index'])
             if self.istrain:
@@ -125,9 +133,9 @@ class TrainDataset(Dataset):
             value['date'] = torch.Tensor(value['date'])
         
         if hasattr(self, "y"):
-            return events, orders, seq_len, targets, torch.LongTensor(label)
+            return events, orders, seq_len, targets, torch.LongTensor(label), sample_idx, torch.stack(summarys)
         else:
-            return events, orders, seq_len, targets, label
+            return events, orders, seq_len, targets, label, sample_idx, torch.stack(summarys)
     
 if __name__ == "__main__":
     from pathlib import Path

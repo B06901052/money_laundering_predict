@@ -50,7 +50,7 @@ class Runner:
             x_path='data/train_x_alert_date.csv',
             y_path="data/train_y_answer.csv",
             max_seq=self.cfg['datarc']["max_seq"],
-            min_seq_ratio=.5,
+            min_seq_ratio=self.cfg['datarc']["min_seq_ratio"],
             istrain=True
         )
         train_size = round(len(dataset) * self.cfg['datarc']["train_ratio"])
@@ -80,10 +80,12 @@ class Runner:
     
     def _get_dataloader(self, mode):
         if mode == "train":
+            self.sampler = WeightedRandomSampler(torch.where(self.datasets["train"].dataset.y[self.datasets["train"].indices]==1, 16, 1), num_samples=self.cfg['datarc']['batch_size']*100)
+            self.mapping = {key: i for i, key in enumerate(self.datasets["train"].indices)}
             return DataLoader(
                 self.datasets["train"],
                 batch_size=self.cfg["datarc"]["batch_size"],
-                sampler=WeightedRandomSampler(torch.where(self.datasets["train"].dataset.y[self.datasets["train"].indices]==1, 40, 1), num_samples=self.cfg['datarc']['batch_size']*100),
+                sampler=self.sampler,
                 collate_fn=self.datasets["train"].dataset.collate_fn,
                 num_workers=self.cfg["datarc"]["num_workers"],
                 pin_memory=True,
