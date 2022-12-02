@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from .module import FeatureEmbedder, SingleEventPredictor
+from module import FeatureEmbedder, SingleEventPredictor
 
 class Model(nn.Module):
     def __init__(self, data_config=None, emb_dim=8, hidden_dim=64):

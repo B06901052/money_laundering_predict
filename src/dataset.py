@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from .preprocess import IndexCounter
+from preprocess import IndexCounter
 
 class PretrainDataset:
     def __init__(self, data_path, max_len=64):
