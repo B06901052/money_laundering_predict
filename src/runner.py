@@ -115,8 +115,9 @@ class Runner:
             total_loss = 0
             # training
             self.model.train()
-            for batch_id, (events, orders, max_seq, targets, labels) in tqdm(enumerate(self.loaders["train"])):
+            for batch_id, (events, orders, max_seq, targets, labels, sample_idx, summarys) in tqdm(enumerate(self.loaders["train"])):
                 # to device
+                summarys = summarys.to(self.args.device)
                 for value in events.values():
                     for key in value:
                         value[key] = value[key].to(self.args.device)
@@ -144,8 +145,9 @@ class Runner:
         all_outs = []
         all_labels = []
         with torch.no_grad():
-            for events, orders, max_seq, targets, labels in tqdm(self.loaders["valid"]):
+            for events, orders, max_seq, targets, labels, sample_idx, summarys in tqdm(self.loaders["valid"]):
                 # to device
+                summarys = summarys.to(self.args.device)
                 for value in events.values():
                     for key in value:
                         value[key] = value[key].to(self.args.device)
@@ -174,8 +176,9 @@ class Runner:
         probs = []
         predict_alert_keys = []
         with torch.no_grad():
-            for events, orders, max_seq, targets, alert_keys in tqdm(self.loaders['test']):
+            for events, orders, max_seq, targets, alert_keys, sample_idx, summarys in tqdm(self.loaders['test']):
                 predict_alert_keys.extend(alert_keys)
+                summarys = summarys.to(self.args.device)
                 for value in events.values():
                     for key in value:
                         value[key] = value[key].to(self.args.device)
