@@ -13,8 +13,8 @@ from pytorch_ranger import Ranger
 from torch.optim import Adam, SGD
 from torch.utils.data import DataLoader, WeightedRandomSampler, random_split
 
-from model import Model
-from dataset import TrainMetaDataset, TrainDataset
+from .model import Model
+from .dataset import TrainMetaDataset, TrainDataset
 
 class Runner:
     def __init__(self, args, runner_config={}, model_config={}):
@@ -80,7 +80,14 @@ class Runner:
     
     def _get_dataloader(self, mode):
         if mode == "train":
-            self.sampler = WeightedRandomSampler(torch.where(self.datasets["train"].dataset.y[self.datasets["train"].indices]==1, 16, 1), num_samples=self.cfg['datarc']['batch_size']*100)
+            self.sampler = WeightedRandomSampler(
+                torch.where(
+                    self.datasets["train"].dataset.y[self.datasets["train"].indices]==1,
+                    torch.FloatTensor([10]),
+                    self.datasets["train"].dataset.weight[self.datasets["train"].indices]
+                ),
+                num_samples=self.cfg['datarc']['batch_size']*100
+            )
             self.mapping = {key: i for i, key in enumerate(self.datasets["train"].indices)}
             return DataLoader(
                 self.datasets["train"],
@@ -123,17 +130,19 @@ class Runner:
                         value[key] = value[key].to(self.args.device)
                 labels = labels.to(device=self.args.device, dtype=torch.float32)
                 # forward
-                pred, loss = self.model(events, orders, max_seq, self.cfg["datarc"]["batch_size"], targets, labels)
+                pred, pred_loss, event_loss = self.model(events, orders, max_seq, self.cfg["datarc"]["batch_size"], targets, labels, summarys=summarys)
+                # idx = [self.mapping[i] for i in sample_idx]
+                # self.sampler.weights[idx] = (self.sampler.weights[idx] * (.1 * (torch.sigmoid(pred) - labels).abs().cpu() +.95)).clamp(.1, 100)
                 # backward
                 self.optim.zero_grad(set_to_none=True)
-                loss.backward()
+                (pred_loss + event_loss).backward()
                 grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.cfg["runner"]["gradient_clipping"])
                 if not math.isnan(grad_norm):
                     self.optim.step()
                 else:
                     print(f"\nnan in batch {batch_id}")
-                pbar.set_postfix({"loss": f"{loss.item():4.2f}"})
-                total_loss += loss.item() * len(labels)
+                pbar.set_postfix({"pred_loss": f"{pred_loss.item():4.2f}", "event_loss": f"{event_loss.item():4.2f}", "seqlen": max_seq})
+                total_loss += pred_loss.item() * len(labels)
             total_loss /= len(self.datasets["train"])
             self.valid()
         probs, predict_alert_keys = self.inference()
@@ -154,9 +163,9 @@ class Runner:
                 all_labels.extend(labels.tolist())
                 labels = labels.to(device=self.args.device, dtype=torch.float32)
                 # forward
-                out, loss = self.model(events, orders, max_seq, self.cfg["datarc"]["batch_size"], targets, labels)
+                out, pred_loss, event_loss = self.model(events, orders, max_seq, self.cfg["datarc"]["batch_size"], targets, labels, summarys=summarys)
                 all_outs.extend(out.cpu().tolist())
-                total_loss += loss.item() * len(labels)
+                total_loss += pred_loss.item() * len(labels)
         # sort by outs
         all_outs = enumerate(sorted(zip(all_outs, all_labels), key=lambda x: x[0], reverse=True))
         # get the reported part
@@ -170,8 +179,10 @@ class Runner:
         
         print(f"\nvalid loss:{total_loss:8.6f}\nprecision :{valid_precision:8.6f}")
         
-    def inference(self):
-        self._load(self.args.expdir / "val_best.ckpt")
+    def inference(self, valid=False):
+        best = 0
+        if not valid:
+            self._load(self.args.expdir / "val_best.ckpt")
         self.model.eval()
         probs = []
         predict_alert_keys = []
@@ -182,7 +193,7 @@ class Runner:
                 for value in events.values():
                     for key in value:
                         value[key] = value[key].to(self.args.device)
-                out = self.model(events, orders, max_seq, self.cfg["datarc"]["batch_size"], targets)
+                out = self.model(events, orders, max_seq, self.cfg["datarc"]["batch_size"], targets, summarys=summarys)
                 out = torch.sigmoid(out)
                 probs.extend(out.cpu().tolist())
             

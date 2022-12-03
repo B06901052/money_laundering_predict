@@ -5,6 +5,8 @@ ccba:
     type: numerical
   byymm:
     type: date
+  ratam:
+    type: numerical
   cycam:
     type: numerical
   usgam:
@@ -19,6 +21,22 @@ ccba:
     type: numerical
   cucah:
     type: numerical
+  loglupay:
+    type: numerical
+  logcycam:
+    type: numerical
+  logusgam:
+    type: numerical
+  logclamt:
+    type: numerical
+  logcsamt:
+    type: numerical
+  loginamt:
+    type: numerical
+  logcucsm:
+    type: numerical
+  logcucah:
+    type: numerical
 cdtx:
   cust_id:
     type: label
@@ -31,6 +49,8 @@ cdtx:
     type: categorical
     num: 51
   amt:
+    type: numerical
+  logamt:
     type: numerical
 custinfo:
   cust_id:
@@ -48,6 +68,8 @@ custinfo:
     fillna: 
       method: new
   total_asset:
+    type: numerical
+  logtotal_asset:
     type: numerical
   AGE:
     type: categorical
@@ -67,6 +89,10 @@ dp:
     type: categorical
     num: 3
   tx_amt:
+    type: numerical
+    fillna: 
+      method: mean
+  logtx_amt:
     type: numerical
     fillna: 
       method: mean
@@ -100,6 +126,8 @@ remit:
     type: categorical
     num: 5
   trade_amount_usd:
+    type: numerical
+  logtrade_amount_usd:
     type: numerical
 public_x:
   alert_key:

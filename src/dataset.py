@@ -1,5 +1,6 @@
 import pickle
 import numpy as np
+import pandas as pd
 
 import torch
 from torch.utils.data import Dataset
@@ -53,11 +54,26 @@ class TrainDataset(Dataset):
         self.min_seq_ratio = min_seq_ratio
         self.istrain = istrain
         if y_path:
+            train_y = pd.read_csv("data/train_y_answer.csv", index_col="alert_key")
+            custinfo = pd.read_csv('data/public_train_x_custinfo_full_hashed.csv', index_col="alert_key")
+            df = pd.merge(train_y, custinfo, "inner", left_index=True, right_index=True)
+            tmp = set(df[df.sar_flag==1].cust_id.to_list())
+            not_used = df.index[df.cust_id.apply(lambda x: x in tmp) & (df.sar_flag==0)].to_list()
+            weight = 1 / df.groupby("cust_id").sar_flag.count()
             with open(y_path, 'r') as f:
                 # alert_key: sar_flag
                 tmp = dict(tuple(line.split(",")) for line in f.read().split("\n")[1:-1])
+                count = 0
+                for key in not_used:
+                    if str(key) in tmp and tmp[str(key)] != "1":
+                        count += 1
+                        tmp[key] = 0.7
+                print(f"{count} samples modified")
+                    
                 self.x = list(tmp.keys())
                 self.y = torch.LongTensor(list(map(lambda x: int(x), tmp.values())))
+                self.weight = torch.Tensor([weight.get(x, 1) for x in self.x])
+                
         else:
             with open(x_path, 'r') as f:
                 # alert_key: sar_flag

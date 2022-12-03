@@ -35,10 +35,13 @@ def load_tables(data_path):
 
 def data_preprocess(tables, data_config, data_path):
     mapping = {}
+    tableinfos = {}
     # iterate each table
     for table_name, table in tables.items():
         # accumulate the index for the categories in the same table
         idx_counter = IndexCounter(1)
+        if table_name == "ccba":
+            table["ratam"] = table.usgam / table.cycam
         for col_name in table:
             cfg = data_config[table_name][col_name]
             if cfg['type'] == "date":
@@ -51,6 +54,11 @@ def data_preprocess(tables, data_config, data_path):
                 mapping[col_name] = dict(zip(labels, idx_counter))
                 table[col_name] = series.apply(lambda x: mapping[col_name][x])
             elif cfg['type'] == "numerical":
+                if col_name in {"lupay", "cycam", "usgam", "clamt", "csamt", "inamt", "cucsm", "cucah", "amt", "total_asset", "tx_amt", "trade_amount_usd"}:
+                    table["log"+col_name] = table[col_name] - table[col_name].min()
+                    table["log"+col_name].fillna(0, inplace=True)
+                    table["log"+col_name] = np.log(table["log"+col_name]+1)
+                    table["log"+col_name] = (table["log"+col_name] - table["log"+col_name].mean()) / table["log"+col_name].std()
                 # normalization
                 table[col_name] = (table[col_name] - table[col_name].mean()) / table[col_name].std()
                 # handle the missing value
@@ -59,6 +67,8 @@ def data_preprocess(tables, data_config, data_path):
                 pass
             else:
                 raise NotImplementedError
+        tableinfos[table_name] = table.describe()
+        tableinfos[table_name].loc["count"] /= len(table.cust_id.unique())
         tables[table_name] = table.groupby("cust_id")
     
     # save the mapping between original label and the index for embedding
@@ -69,14 +79,15 @@ def data_preprocess(tables, data_config, data_path):
         with open(data_path / "mapping.pkl", 'wb') as f:
             pickle.dump(mapping, f)
         
-    return tables
+    return tables, tableinfos
         
-def concat_data(grouped_tables, data_config):
+def concat_data(grouped_tables, tableinfos, data_config):
     # construct a dict which keys are all cust_ids
     data = {key: {} for key in grouped_tables["custinfo"].groups.keys()}
     for table_name, table in grouped_tables.items():
         data_type_counter = Counter(v['type'] for v in data_config[table_name].values())
         for cust_id, df in table:
+            data[cust_id][table_name + "_summary"] = (df.describe() / tableinfos[table_name]).to_numpy().flatten()[len(tableinfos[table_name].columns)-1:]
             num = len(df)
             data[cust_id][table_name] = {}
             cat_idx_counter = IndexCounter()
@@ -110,7 +121,8 @@ def concat_data(grouped_tables, data_config):
     for cust_id, tables in list(data.items()):
         event_index = []
         for table_name, table in tables.items():
-            event_index.extend((table_name, i, date) for i, date in enumerate(table["date"]))
+            if not table_name.endswith("_summary"):
+                event_index.extend((table_name, i, date) for i, date in enumerate(table["date"]))
         event_index.sort(key=lambda x: x[-1])
         data[cust_id]["event_index"] = event_index
     
@@ -123,8 +135,8 @@ if __name__ == "__main__":
         data_config = yaml.load(f, yaml.Loader)
 
     tables = load_tables(data_path)
-    grouped_tables = data_preprocess(tables, data_config, data_path)
-    data = concat_data(grouped_tables, data_config)
+    grouped_tables, tableinfos = data_preprocess(tables, data_config, data_path)
+    data = concat_data(grouped_tables, tableinfos, data_config)
     with open(data_path / "data.pkl", 'wb') as f:
         pickle.dump(data, f)
     """
