@@ -4,7 +4,7 @@ import random
 import torch
 import torch.nn as nn
 from torch.nn.utils import weight_norm
-from .module import FeatureEmbedder, SingleEventPredictor
+from .module import FeatureEmbedder, SingleEventPredictor, ResidualBlock
 
 class Model(nn.Module):
     def __init__(self, data_config=None, emb_dim=8, hidden_dim=128):
@@ -59,23 +59,27 @@ class Model(nn.Module):
         #     norm = nn.LayerNorm(hidden_dim),
         # )
         
-        self.summary_net = nn.Sequential(
-            nn.Dropout(.5, True),
-            nn.Linear(127+36+50+85+29, hidden_dim),
-            nn.BatchNorm1d(hidden_dim, affine=False),
-            nn.ReLU(True),
-            weight_norm(nn.Linear(hidden_dim, hidden_dim)),
-            nn.ReLU(),
-            weight_norm(nn.Linear(hidden_dim, hidden_dim)),
-            nn.BatchNorm1d(hidden_dim, affine=False),
-        )
+        # self.summary_net = nn.Sequential(
+        #     nn.Dropout(.5, True),
+        #     nn.Linear(127+36+50+85+29, hidden_dim),
+        #     nn.BatchNorm1d(hidden_dim, affine=False),
+        #     nn.ReLU(True),
+        #     weight_norm(nn.Linear(hidden_dim, hidden_dim)),
+        #     nn.ReLU(),
+        #     weight_norm(nn.Linear(hidden_dim, hidden_dim)),
+        #     nn.BatchNorm1d(hidden_dim, affine=False),
+        # )
         
         self.pred_head = nn.Sequential(
-            nn.Linear(hidden_dim<<1, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
+            ResidualBlock(hidden_dim),
+            ResidualBlock(hidden_dim),
+            ResidualBlock(hidden_dim),
+            # nn.Linear(hidden_dim, hidden_dim),
+            # nn.ReLU(),
+            # nn.Linear(hidden_dim, hidden_dim),
+            # nn.ReLU(),
             nn.Linear(hidden_dim, 1),
+            nn.Flatten(0),
         )
         
         self.hidden_dim = hidden_dim
@@ -113,9 +117,10 @@ class Model(nn.Module):
         # feat = self.attn1(feat, feat, feat, key_padding_mask=mask)[0]
         feat = self.net(feat, src_key_padding_mask=key_mask)
         # predict sar
-        summary_feat = self.summary_net(summarys.nan_to_num(posinf=0, neginf=0))
-        pred = self.pred_head(torch.cat(((feat[range(len(targets)), targets]).squeeze(-1), summary_feat), dim=1)).squeeze(-1)
-        # pred = self.pred_head((feat[range(len(targets)), targets]).squeeze(-1)).squeeze(-1)
+        # summary_feat = self.summary_net(summarys.nan_to_num(posinf=0, neginf=0))
+        # summary_feat = torch.zeros_like(summary_feat)
+        # pred = self.pred_head(torch.cat(((feat[range(len(targets)), targets]).squeeze(-1), summary_feat), dim=1))
+        pred = self.pred_head((feat[range(len(targets)), targets]).squeeze(-1))
         if labels is not None:
             # pred_loss = self.pred_crit(pred, labels)
             # TODO: label smoothing?

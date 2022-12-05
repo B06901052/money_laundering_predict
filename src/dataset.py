@@ -65,9 +65,10 @@ class TrainDataset(Dataset):
                 tmp = dict(tuple(line.split(",")) for line in f.read().split("\n")[1:-1])
                 count = 0
                 for key in not_used:
-                    if str(key) in tmp and tmp[str(key)] != "1":
+                    if str(key) in tmp:
+                        assert tmp[str(key)] != "1"
                         count += 1
-                        tmp[key] = 0.7
+                        tmp[key] = .7
                 print(f"{count} samples modified")
                     
                 self.x = list(tmp.keys())

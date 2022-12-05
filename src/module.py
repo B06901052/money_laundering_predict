@@ -2,6 +2,18 @@ import torch
 import torch.nn as nn
 from torch.nn.utils import weight_norm
 
+class ResidualBlock(nn.Module):
+    def __init__(self, hidden_dim):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.BatchNorm1d(hidden_dim, affine=False),
+            nn.Linear(hidden_dim, hidden_dim),
+        )
+    
+    def forward(self, inputs):
+        return self.net(inputs) + inputs
 class FeatureEmbedder(nn.Module):
     def __init__(
         self,
