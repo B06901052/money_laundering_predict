@@ -1,24 +1,27 @@
+import os
 import yaml
 import pickle
 import numpy as np
 import pandas as pd
+import argparse
 from pathlib import Path
 from collections import Counter
 
-import torch
 from pdb import set_trace
 
-class IndexCounter:
-    def __init__(self, start_idx=0):
-        self.idx = start_idx - 1
-        
-    def __iter__(self):
-        while True:
-            self.idx += 1
-            yield self.idx
-    def __next__(self):
-        self.idx += 1
-        return self.idx
+def get_downstream_args():
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument('-n', '--neg', type=int, required=True)
+    parser.add_argument('-p', '--pos', type=int, required=True)
+    parser.add_argument('-d', '--day', type=int, required=True)
+    parser.add_argument( '--test', action='store_true')
+    parser.add_argument( '--train', action='store_true')
+    args = parser.parse_args()
+    if args.neg > 243: raise ValueError
+    if args.pos > 20000: raise ValueError
+
+    return args
 
 def load_tables(data_path):
     tables = {}
@@ -169,117 +172,27 @@ def form_dataset(sas:pd, nonsas:pd):
 def form_testset(data:pd):
     data.drop(['cust_id'],axis=1,inplace=True)
     return data.to_numpy()
-
-   
-# def data_preprocess(tables, data_config, data_path):
-#     mapping = {}
-#     for table_name, table in tables.items():
-#         idx_counter = IndexCounter()
-#         for col_name in table:
-#             cfg = data_config[table_name][col_name]
-#             if cfg['type'] == "date":
-#                 table[col_name] = table[col_name] / 365
-#             elif cfg['type'] == "categorical":
-#                 series = table[col_name].fillna(-1)
-#                 labels = sorted(series.unique())
-#                 mapping[col_name] = dict(zip(labels, idx_counter))
-#                 table[col_name] = series.apply(lambda x: mapping[col_name][x])
-#             elif cfg['type'] == "numerical":
-#                 table[col_name] = (table[col_name] - table[col_name].mean()) / table[col_name].std()
-#             elif cfg['type'] == "label":
-#                 pass
-#             else:
-#                 raise NotImplementedError
-#         set_trace()
-#         tables[table_name] = table.groupby("cust_id")
-    
-#     # save the mapping between original label and the index for embedding
-#     if (data_path / "mapping.pkl").exists():
-#         with open(data_path / "mapping.pkl", 'rb') as f:
-#             assert mapping == pickle.load(f), "mapping is different"
-#     else:
-#         with open(data_path / "mapping.pkl", 'wb') as f:
-#             pickle.dump(mapping, f)
-        
-#     return tables
-        
-# def concat_data(grouped_tables, data_config):
-#     data = {key: {} for key in grouped_tables["custinfo"].groups.keys()}
-#     for table_name, table in grouped_tables.items():
-#         data_type_counter = Counter(v['type'] for v in data_config[table_name].values())
-#         for cust_id, df in table:
-#             num = len(df)
-#             data[cust_id][table_name] = {}
-#             cat_idx_counter = IndexCounter()
-#             num_idx_counter = IndexCounter()
-#             categorical = np.empty((num, data_type_counter["categorical"]), dtype=np.int64)
-#             numerical = np.empty((num, data_type_counter["numerical"]), dtype=np.float32)
-#             for col_name in df:
-#                 cfg = data_config[table_name][col_name]
-#                 if cfg['type'] == "date":
-#                     date = np.array(df[col_name], dtype=np.float32)
-#                 elif cfg['type'] == "categorical":
-#                     categorical[:, next(cat_idx_counter)] = df[col_name].to_numpy(dtype=np.int64)
-#                 elif cfg['type'] == "numerical":
-#                     numerical[:, next(num_idx_counter)] = df[col_name].to_numpy(dtype=np.float32)
-#                 elif cfg['type'] == "label":
-#                     data[cust_id][table_name][col_name] = df[col_name].tolist()
-#                 else:
-#                     raise NotImplementedError
-
-#             data[cust_id][table_name]["date"] = date
-#             data[cust_id][table_name]["cat"] = categorical
-#             data[cust_id][table_name]["num"] = numerical
-    
-#     for cust_id, tables in list(data.items()):
-#         event_index = []
-#         for table_name, table in tables.items():
-#             event_index.extend(((table_name, i, date) for i, date in enumerate(table["date"])))
-#         event_index.sort(key=lambda x: x[-1])
-#         data[cust_id]["event_index"] = event_index
-    
-#     return data
-    
     
 if __name__ == "__main__":
-    data_path = Path("data")
-    with open(data_path / "data_config.yaml", 'r') as f:
-        data_config = yaml.load(f, yaml.Loader)
+    args = get_downstream_args()
 
+    data_path = Path("data")
     tables = load_tables(data_path)
-    # grouped_tables = data_preprocess(tables, data_config, data_path)
-    # data = concat_data(grouped_tables, data_config)
-   
     # #train
-    # sas_alertKeys, non_sas_alertKeys = find_sas_nonsas_key(234,20000)
-    # sas = alerkey_find_info(sas_alertKeys, 30, tables, data_path/ 'analyze' /'sas_data.csv')
-    # nonsas = alerkey_find_info(non_sas_alertKeys, 30, tables, data_path/ 'analyze' /'non_sas.csv')
-    # data = form_dataset(sas, nonsas)
-    # with open(data_path / "data.pkl", 'wb') as f:
-    #     pickle.dump(data, f)
+    if args.train:
+        sas_alertKeys, non_sas_alertKeys = find_sas_nonsas_key(args.pos,args.neg)
+        os.makedirs(data_path/ 'analyze', exist_ok=True)
+        sas = alerkey_find_info(sas_alertKeys, args.day, tables, data_path/ 'analyze' /'sas_data.csv')
+        nonsas = alerkey_find_info(non_sas_alertKeys, args.day, tables, data_path/ 'analyze' /'non_sas.csv')
+        data = form_dataset(sas, nonsas)
+        with open(data_path / "train_data.pkl", 'wb') as f:
+            pickle.dump(data, f)
 
     #test
-    test_keys = pd.read_csv(data_path / "public_x_alert_date.csv")['alert_key'].to_numpy()
-    test_data = alerkey_find_info(test_keys, 30, tables, data_path/ 'analyze' /'test.csv')
-    test_data = form_testset(test_data)
-    with open(data_path / "test_data.pkl", 'wb') as f:
-        pickle.dump(test_data, f)
+    if args.test:
+        test_keys = pd.read_csv(data_path / "public_x_alert_date.csv")['alert_key'].to_numpy()
+        test_data = alerkey_find_info(test_keys, args.day, tables, data_path/ 'analyze' /'test.csv')
+        test_data = form_testset(test_data)
+        with open(data_path / "test_data.pkl", 'wb') as f:
+            pickle.dump(test_data, f)
     
-    
-
-    """
-    The final data will be something like:
-    {
-        cust_id: {
-            table_name: {
-                date: np.ndarray (shape: (num, ))
-                cat: np.ndarray(shape: (num, # of categorical features))
-                num: np.ndarray(shape: (num, # of numerical features))
-            }
-            ...
-            "event_index": [(table_name, index), ...]
-        }
-        ...
-    }
-    """
-        
